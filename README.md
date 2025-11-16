@@ -22,24 +22,94 @@ Agent 3: Event Creator	Creates the actual calendar event
 ⚙️ Architecture Diagram (Mermaid & Excalidraw/Erseer Compatible)
 Mermaid Code
 https://www.mermaidchart.com/d/d2e3f91c-d0e6-4901-89ad-6c7246b3a6de
-flowchart TD
-A[Telegram Webhook] --> B[Parse Telegram]
 
-B --> C[Agent 1 - Conversation Router]
-
-C -->|Not Meeting| R[Send Response to Telegram]
-
-C -->|Incomplete| R
-
-C -->|Complete Meeting Info| D[Agent 2 - Availability Checker]
-
-D -->|Conflict| R
-
-D -->|Available| E[Agent 3 - Create Event]
-
-E --> F[Google Calendar API]
-
-F --> R[Send Response to Telegram]
+┌──────────────────────────────────────────────────────────────┐
+│                    TELEGRAM WEBHOOK                          │
+│                  User: "Hello schedule..."                    │
+└────────────────────────┬─────────────────────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────┐
+              │  Parse Telegram      │
+              │  Extract: chat_id,   │
+              │           text       │
+              └────────┬─────────────┘
+                       │
+                       ▼
+    ┌──────────────────────────────────────┐
+    │  AGENT 1: Conversation Router        │
+    │  ┌──────────────────────────────────┤
+    │  │ System Prompt:                   │
+    │  │ - Understand user intent         │
+    │  │ - Detect meeting requests        │
+    │  │ - Route to appropriate path      │
+    │  │ - Ask for missing details        │
+    │  │ - Do NOT call other agents       │
+    │  └──────────────────────────────────┤
+    │  ┌──────────────────────────────────┤
+    │  │ Tools: NONE                      │
+    │  │ Memory: Redis (maintain context) │
+    │  └──────────────────────────────────┘
+    └────┬─────────────┬─────────────┬────┘
+         │             │             │
+         │ (Not        │ (Missing    │ (Complete
+         │  Meeting)   │  Details)   │  Details)
+         │             │             │
+         ▼             ▼             ▼
+      REPLY        REPLY          ┌─────────────────────────┐
+    (Regular      (Ask for        │ AGENT 2: Availability   │
+     chat)        missing)        │ Check                   │
+                                  │ ┌─────────────────────┤
+                                  │ │ System Prompt:      │
+                                  │ │ - Check calendar    │
+                                  │ │ - Use tool only     │
+                                  │ │ - Return availability
+                                  │ │ - Suggest alternatives
+                                  │ │ if conflict         │
+                                  │ └─────────────────────┤
+                                  │ ┌─────────────────────┤
+                                  │ │ Tools:              │
+                                  │ │ "Get events"        │
+                                  │ └─────────────────────┘
+                                  └────┬─────────────────┘
+                                       │
+                              ┌────────┴────────┐
+                              │                 │
+                          (FREE)            (CONFLICT)
+                              │                 │
+                              ▼                 ▼
+                    ┌──────────────────┐    SEND REPLY
+                    │ AGENT 3: Create  │    (Stop here)
+                    │ Event            │
+                    │ ┌────────────────┤
+                    │ │ System Prompt: │
+                    │ │ - Create event │
+                    │ │ - Use tool     │
+                    │ │ - Confirm      │
+                    │ └────────────────┤
+                    │ ┌────────────────┤
+                    │ │ Tools:         │
+                    │ │ "Create event" │
+                    │ └────────────────┘
+                    └────┬─────────────┘
+                         │
+                         ▼
+                ┌─────────────────────┐
+                │ Merge All Responses │
+                │ (from all 3 agents) │
+                └────┬────────────────┘
+                     │
+                     ▼
+              ┌──────────────────┐
+              │ Parse Response   │
+              │ Extract message  │
+              └────┬─────────────┘
+                   │
+                   ▼
+         ┌──────────────────────┐
+         │ Send Telegram        │
+         │ Message              │
+         └──────────────────────┘
 
 Mermaid Sequence Diagram
 sequenceDiagram
