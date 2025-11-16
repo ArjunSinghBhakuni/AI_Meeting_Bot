@@ -21,6 +21,7 @@ Agent 2: Availability Checker	Checks calendar conflicts
 Agent 3: Event Creator	Creates the actual calendar event
 ⚙️ Architecture Diagram (Mermaid & Excalidraw/Erseer Compatible)
 Mermaid Code
+https://www.mermaidchart.com/d/d2e3f91c-d0e6-4901-89ad-6c7246b3a6de
 flowchart TD
 A[Telegram Webhook] --> B[Parse Telegram]
 
