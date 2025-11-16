@@ -1,0 +1,412 @@
+{
+  "name": "Simple Meeting Bot - One Agent Direct Create",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=user:{{ $('Telegram Webhook1').item.json.body.message.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a Meeting Creator AI that automatically schedules Google Calendar events.\n\nYour goals:\n1. Understand the user's message and extract meeting details.\n2. Convert all dates and times into full ISO 8601 UTC datetime format.\n3. If required information is missing, ask only one specific follow-up question.\n4. If all required information is available, respond with a JSON object containing \"create_event\".\n5. Respond only in JSON. No markdown, no commentary, no extra text.\n\n-----------------------------------------\nREQUIRED FIELDS before create_event:\n- summary: Meeting subject/title\n- start: ISO datetime (YYYY-MM-DDTHH:MM:SSZ)\n- end: ISO datetime (YYYY-MM-DDTHH:MM:SSZ)\n- attendees: array of one or more email addresses\n\nDEFAULTS:\n- duration = 1 hour if not mentioned\n- description = \"Scheduled via Telegram Meeting Assistant\"\n- googleMeet = false unless user clearly requests a Meet link\n-----------------------------------------\n\nDATE PARSING RULES:\nConvert natural language into a valid date:\n- \"today\" = today's date\n- \"tomorrow\" = today + 1 day\n- \"next Monday/Friday/etc.\" = compute next occurrence of weekday\n- \"Dec 25\" = this year, unless already passed → then next year\n- \"2025-11-20\" = use as provided (must remain ISO date)\n\nTIME PARSING RULES:\nConvert times into 24-hour UTC format:\n- \"2pm\" → 14:00:00Z\n- \"8:30am\" → 08:30:00Z\n- \"14:00\" → 14:00:00Z\n- \"morning\" → 09:00:00Z\n- \"afternoon\" → 14:00:00Z\n- \"evening\" → 18:00:00Z\n\nATTENDEE RULES:\nExtract all valid emails even if mixed in text.\n\n-----------------------------------------\nVALID JSON OUTPUT FORMATS:\n\n1️⃣ Ask for missing info:\n{\n  \"action\": \"ask_user\",\n  \"question\": \"string\"\n}\n\n2️⃣ Create event (only when all data is known):\n{\n  \"action\": \"create_event\",\n  \"summary\": \"string\",\n  \"description\": \"string or null\",\n  \"start\": \"YYYY-MM-DDTHH:MM:SSZ\",\n  \"end\": \"YYYY-MM-DDTHH:MM:SSZ\",\n  \"attendees\": [\"email@example.com\"],\n  \"googleMeet\": true or false\n}\n\n3️⃣ General response (not a scheduling request):\n{\n  \"action\": \"reply\",\n  \"message\": \"string\"\n}\n\n-----------------------------------------\nEXAMPLES\n\nUser: \"Create meeting tomorrow 2pm with john@example.com about standup\"\n→ Output:\n{\n  \"action\": \"create_event\",\n  \"summary\": \"standup\",\n  \"description\": \"Scheduled via Telegram Meeting Assistant\",\n  \"start\": \"2025-11-17T14:00:00Z\",\n  \"end\": \"2025-11-17T15:00:00Z\",\n  \"attendees\": [\"john@example.com\"],\n  \"googleMeet\": false\n}\n\nUser: \"Schedule a meeting next Friday\"\n→ Output:\n{\n  \"action\": \"ask_user\",\n  \"question\": \"What time should the meeting start?\"\n}\n\n-----------------------------------------\nIMPORTANT RULES:\n• Respond ONLY with valid JSON.\n• Never include markdown, code fences, or extra explanation.\n• Do NOT include trailing commas.\n• Do NOT invent details if unsure—ask for missing info.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -720,
+        2176
+      ],
+      "id": "41bd054b-96c7-432b-b515-6a3001b2712c",
+      "name": "Meeting Creator Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json || {};\nconst message = data.output || 'Meeting processed';\nconst chatId=$('Telegram Webhook1').first().json.body.message.chat.id | 0;\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    text: message,\n    parse_mode: 'HTML'\n  }\n}];"
+      },
+      "id": "6b26e0fc-1a5a-4937-bd0b-997495e123c1",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, status: 'processed' } }}",
+        "options": {}
+      },
+      "id": "3b32fdfa-083f-482e-99c2-9a7f7be436f3",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telegram-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "95dcc33a-26b0-4b02-9a59-60b67621629f",
+      "name": "Telegram Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1088,
+        2176
+      ],
+      "webhookId": "telegram-meeting-bot"
+    },
+    {
+      "parameters": {
+        "jsCode": "const u = $input.first().json;\nconst m = u.message || u.edited_message;\nif (!m || !m.text) return [{json:{skip:true}}];\nreturn [{json:{chat_id:m.chat.id, text:m.text, skip:false}}];"
+      },
+      "id": "ecfef8df-a334-4528-9fea-19d39474a05e",
+      "name": "Parse Telegram1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8171521048:AAEp70GHbKimHPwI5qObTHqHl1v9jsmNTKs/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n     \"chat_id\": {{ $('Telegram Webhook1').item.json.body.message.chat.id }},\n     \"text\": \"{{ $json.text  }}\",\n     \"parse_mode\": \"HTML\"\n   }",
+        "options": {}
+      },
+      "id": "63d09f81-4e60-439f-9792-61ea8456c772",
+      "name": "Send Telegram Message2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "arjunbhakuni23@gmail.com",
+          "mode": "list",
+          "cachedResultName": "arjunbhakuni23@gmail.com"
+        },
+        "start": "={{ $json.output.start }}",
+        "end": "={{ $json.output.end }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -240,
+        2000
+      ],
+      "id": "dff19a0a-a5ff-4ed9-9478-3a68c08a5b5a",
+      "name": "Create an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "iNJBEk8qEyL2TmuV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"oneOf\": [\n    {\n      \"type\": \"object\",\n      \"properties\": {\n        \"action\": { \"type\": \"string\", \"const\": \"ask_user\" },\n        \"question\": { \"type\": \"string\" }\n      },\n      \"required\": [\"action\", \"question\"],\n      \"additionalProperties\": false\n    },\n    {\n      \"type\": \"object\",\n      \"properties\": {\n        \"action\": { \"type\": \"string\", \"const\": \"create_event\" },\n        \"summary\": { \"type\": \"string\" },\n        \"description\": { \"type\": \"string\" },\n        \"start\": { \"type\": \"string\", \"pattern\": \"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$\" },\n        \"end\": { \"type\": \"string\", \"pattern\": \"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$\" },\n        \"attendees\": {\n          \"type\": \"array\",\n          \"items\": { \"type\": \"string\", \"format\": \"email\" },\n          \"minItems\": 1\n        },\n        \"googleMeet\": { \"type\": \"boolean\" }\n      },\n      \"required\": [\"action\", \"summary\", \"start\", \"end\", \"attendees\", \"googleMeet\"],\n      \"additionalProperties\": false\n    },\n    {\n      \"type\": \"object\",\n      \"properties\": {\n        \"action\": { \"type\": \"string\", \"const\": \"reply\" },\n        \"message\": { \"type\": \"string\" }\n      },\n      \"required\": [\"action\", \"message\"],\n      \"additionalProperties\": false\n    }\n  ]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -560,
+        2352
+      ],
+      "id": "ceab7478-d768-4579-a58b-baae7df68843",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6cee4468-7c30-48db-bf71-61c0e635796b",
+              "leftValue": "={{ $json.output.action }}",
+              "rightValue": "create_event",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -384,
+        2160
+      ],
+      "id": "e7445c5e-2a26-4b6c-9169-8f4a39f86504",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json || {};\nconst message = $input.first().json.output.question || 'Meeting processed';\nconst chatId=$('Telegram Webhook1').first().json.body.message.chat.id | 0;\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    text: message,\n    parse_mode: 'HTML'\n  }\n}];"
+      },
+      "id": "06704908-a7ed-48ee-b82f-1aeabf0ff0a9",
+      "name": "Parse Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, status: 'processed' } }}",
+        "options": {}
+      },
+      "id": "f4342304-373c-44f8-af9b-c533804b2867",
+      "name": "Webhook Response2",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot8171521048:AAEp70GHbKimHPwI5qObTHqHl1v9jsmNTKs/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n     \"chat_id\": {{ $('Telegram Webhook1').item.json.body.message.chat.id }},\n     \"text\": \"{{ $json.text  }}\",\n     \"parse_mode\": \"HTML\"\n   }",
+        "options": {}
+      },
+      "id": "d9ed93df-1798-450e-bf69-bcea021e26c4",
+      "name": "Send Telegram Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        2352
+      ],
+      "id": "ee314b52-fc92-4f6e-90d5-7f6804448d34",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "id": "WUCCmJSY7vgn2Ddr",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Webhook1').item.json.body.message.chat.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
+      "typeVersion": 1.5,
+      "position": [
+        -672,
+        2352
+      ],
+      "id": "b1e4f4ee-ecaa-4a6e-9cd9-1aa1b93925eb",
+      "name": "Redis Chat Memory1",
+      "credentials": {
+        "redis": {
+          "id": "QeO9uNz3QJrGTEJN",
+          "name": "Redis account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Parse Telegram1": {
+      "main": [
+        [
+          {
+            "node": "Meeting Creator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meeting Creator Agent": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Parse Telegram1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Message2": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Meeting Creator Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response1": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Meeting Creator Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Chat Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Meeting Creator Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a3475ffe-e842-449b-b065-9fa1a9319e70",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "30d74ed17ee31ae9dadc18c42c7d7dd7e87b96066710ad3994993b0afafdd244"
+  },
+  "id": "SxO57atu4GMF0j5t",
+  "tags": []
+}
